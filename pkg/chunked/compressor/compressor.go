@@ -6,11 +6,15 @@ package compressor
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 
+	"github.com/containerd/stargz-snapshotter/estargz"
 	"github.com/containers/storage/pkg/chunked/internal"
 	"github.com/containers/storage/pkg/ioutils"
+	"github.com/klauspost/pgzip"
 	"github.com/opencontainers/go-digest"
 	"github.com/vbatts/tar-split/archive/tar"
 )
@@ -217,4 +221,90 @@ func ZstdCompressor(r io.Writer, metadata map[string]string, level *int) (io.Wri
 	}
 
 	return zstdChunkedWriterWithLevel(r, metadata, *level)
+}
+
+type estarCompressor struct {
+	file             *os.File
+	writer           io.Writer
+	metadata         map[string]string
+	compressionLevel *int
+}
+
+func (c estarCompressor) Write(p []byte) (int, error) {
+	return c.file.Write(p)
+}
+
+func (c estarCompressor) Close() error {
+	defer c.file.Close()
+	st, err := c.file.Stat()
+	if err != nil {
+		return err
+	}
+	sr := io.NewSectionReader(c.file, 0, st.Size())
+
+	compressionLevel := pgzip.BestCompression
+	if c.compressionLevel != nil {
+		compressionLevel = *c.compressionLevel
+	}
+
+	blob, err := estargz.Build(sr, estargz.WithCompressionLevel(compressionLevel))
+	if err != nil {
+		return err
+	}
+	defer blob.Close()
+
+	pr, pw := io.Pipe()
+	uncompressedSizeChan := make(chan int64)
+	go func() {
+		defer pr.Close()
+		defer close(uncompressedSizeChan)
+
+		r, err := pgzip.NewReader(pr)
+		if err != nil {
+			pr.CloseWithError(err)
+			return
+		}
+		defer r.Close()
+
+		nBytes, err := io.Copy(c, r)
+		if err != nil {
+			pr.CloseWithError(err)
+			return
+		}
+		uncompressedSizeChan <- nBytes
+	}()
+
+	if _, err = io.Copy(c.writer, io.TeeReader(blob, pw)); err != nil {
+		pw.Close()
+		return err
+	}
+	if err := pw.Close(); err != nil {
+		return err
+	}
+
+	uncompressedSize := <-uncompressedSizeChan
+
+	c.metadata[estargz.TOCJSONDigestAnnotation] = string(blob.TOCDigest())
+	c.metadata[estargz.StoreUncompressedSizeAnnotation] = fmt.Sprintf("%v", uncompressedSize)
+
+	return err
+}
+
+// EstargzCompressor is a CompressorFunc for the estargz compression algorithm.
+func EstargzCompressor(r io.Writer, metadata map[string]string, level *int) (io.WriteCloser, error) {
+	file, err := ioutil.TempFile("", "estargz-layer")
+	if err != nil {
+		return nil, err
+	}
+	// Unlink immediately the file so we won't leak it.
+	if err := os.Remove(file.Name()); err != nil {
+		return nil, err
+	}
+
+	return estarCompressor{
+		compressionLevel: level,
+		file:             file,
+		writer:           r,
+		metadata:         metadata,
+	}, nil
 }

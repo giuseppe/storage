@@ -13,8 +13,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/opencontainers/go-digest"
+	zstd "github.com/valyala/gozstd"
 )
 
 type TOC struct {
@@ -169,7 +169,6 @@ func WriteZstdChunkedManifest(dest io.Writer, outMetadata map[string]string, off
 	return appendZstdSkippableFrame(dest, manifestDataLE)
 }
 
-func ZstdWriterWithLevel(dest io.Writer, level int) (*zstd.Encoder, error) {
-	el := zstd.EncoderLevelFromZstd(level)
-	return zstd.NewWriter(dest, zstd.WithEncoderLevel(el))
+func ZstdWriterWithLevel(dest io.Writer, level int) (*zstd.Writer, error) {
+	return zstd.NewWriterLevel(dest, level), nil
 }

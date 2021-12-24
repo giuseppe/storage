@@ -752,7 +752,7 @@ func (c *chunkedDiffer) appendCompressedStreamToFile(compression compressedFileT
 	switch compression {
 	case fileTypeZstdChunked:
 		if c.zstdReader == nil {
-			r, err := zstd.NewReader(reader)
+			r, err := zstd.NewReader(reader, zstd.WithDecoderConcurrency(1))
 			if err != nil {
 				return err
 			}

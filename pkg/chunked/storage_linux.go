@@ -1263,6 +1263,42 @@ func (c *chunkedDiffer) findAndCopyFile(dirfd int, r *internal.FileMetadata, cop
 	return false, nil
 }
 
+func makeEntriesFlat(dirfd int, mergedEntries []internal.FileMetadata) ([]internal.FileMetadata, error) {
+	var new []internal.FileMetadata
+
+	hashes := make(map[string]string)
+	for i := range mergedEntries {
+		if mergedEntries[i].Type != TypeReg {
+			continue
+		}
+		if mergedEntries[i].Digest == "" {
+			continue
+		}
+		digest, err := digest.Parse(mergedEntries[i].Digest)
+		if err != nil {
+			return nil, err
+		}
+		d := digest.Encoded()
+
+		if hashes[d] != "" {
+			continue
+		}
+		hashes[d] = d
+
+		mergedEntries[i].Name = fmt.Sprintf("%s/%s", d[0:2], d[2:])
+
+		// check if it already exists
+		var stat unix.Stat_t
+		if unix.Fstatat(dirfd, mergedEntries[i].Name, &stat, 0) == nil {
+			continue
+		}
+
+		unix.Mkdirat(dirfd, d[0:2], 0755)
+		new = append(new, mergedEntries[i])
+	}
+	return new, nil
+}
+
 func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, differOpts *graphdriver.DifferOptions) (graphdriver.DriverWithDifferOutput, error) {
 	defer c.layersCache.release()
 	defer func() {
@@ -1330,6 +1366,13 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 		return output, fmt.Errorf("cannot open %q: %w", dest, err)
 	}
 	defer unix.Close(dirfd)
+
+	if differOpts != nil && differOpts.Format == graphdriver.DifferOutputFormatFlat {
+		mergedEntries, err = makeEntriesFlat(dirfd, mergedEntries)
+		if err != nil {
+			return output, err
+		}
+	}
 
 	// hardlinks can point to missing files.  So create them after all files
 	// are retrieved

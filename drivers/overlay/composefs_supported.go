@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"unsafe"
 
 	"github.com/containers/storage/pkg/loopback"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -530,6 +532,20 @@ func composeFsSupported() bool {
 	return true
 }
 
+func enableVerity(fd int) error {
+	enableArg := unix.FsverityEnableArg{
+		Version:        1,
+		Hash_algorithm: unix.FS_VERITY_HASH_ALG_SHA256,
+		Block_size:     4096,
+	}
+
+	_, _, e1 := syscall.Syscall(unix.SYS_IOCTL, uintptr(fd), uintptr(unix.FS_IOC_ENABLE_VERITY), uintptr(unsafe.Pointer(&enableArg)))
+	if e1 != 0 {
+		return fmt.Errorf("failed to enable verity")
+	}
+	return nil
+}
+
 func generateComposeFsBlob(toc []byte, destFile string) error {
 	cstring := C.CString(string(toc))
 	defer C.free(unsafe.Pointer(cstring))
@@ -539,6 +555,11 @@ func generateComposeFsBlob(toc []byte, destFile string) error {
 		return fmt.Errorf("failed to open output file: %w", err)
 	}
 
+	newFd, err := unix.Open(fmt.Sprintf("/proc/self/fd/%d", outFd), unix.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to dup output file: %w", err)
+	}
+	defer unix.Close(newFd)
 
 	if writerJson, err := exec.LookPath("composefs-from-json"); err == nil {
 		err := func() error {
@@ -587,6 +608,11 @@ func generateComposeFsBlob(toc []byte, destFile string) error {
 			return fmt.Errorf("failed to convert json to erofs")
 		}
 	}
+
+	if err := enableVerity(newFd); err != nil {
+		logrus.Warning("failed to enable verity")
+	}
+
 	return nil
 }
 

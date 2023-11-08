@@ -1560,9 +1560,9 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 		TOCDigest: c.contentDigest,
 	}
 
-	if !parseBooleanPullOption(c.storeOpts, "enable_partial_images", false) {
-		return output, errors.New("enable_partial_images not configured")
-	}
+	//if !parseBooleanPullOption(c.storeOpts, "enable_partial_images", false) {
+	//	return output, errors.New("enable_partial_images not configured")
+	//}
 
 	// When the hard links deduplication is used, file attributes are ignored because setting them
 	// modifies the source file as well.

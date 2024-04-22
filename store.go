@@ -1002,6 +1002,7 @@ func (s *store) load() error {
 	}
 
 	for _, store := range additionalImageStores {
+		driverPrefix = "vfs-"
 		gipath := filepath.Join(store, driverPrefix+"images")
 		var ris roImageStore
 		// both the graphdriver and the imagestore must be used read-write.
@@ -1163,6 +1164,7 @@ func (s *store) getROLayerStoresLocked() ([]roLayerStore, error) {
 	}
 
 	for _, store := range s.graphDriver.AdditionalImageStores() {
+		driverPrefix = "vfs-"
 		glpath := filepath.Join(store, driverPrefix+"layers")
 
 		rls, err := newROLayerStore(rlpath, glpath, s.graphDriver)

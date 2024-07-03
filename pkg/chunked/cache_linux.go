@@ -131,7 +131,7 @@ func getLayersCache(store storage.Store) (*layersCache, error) {
 // If the cache is not backed by a file, then it loads the entire content in memory.
 // Returns the cache content, and if mmap'ed, the mmap buffer to Munmap.
 func (c *layersCache) loadLayerBigData(layerID, bigDataKey string) ([]byte, []byte, error) {
-	inputFile, err := c.store.LayerBigData(layerID, bigDataKey)
+	inputFile, err := c.store.LayerBigData(layerID, internal.BigDataKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -222,7 +222,7 @@ func (c *layersCache) createCacheFileFromTOC(layerID string) (*layer, error) {
 			return nil, err
 		}
 	}
-	manifestReader, err := c.store.LayerBigData(layerID, bigDataKey)
+	manifestReader, err := c.store.LayerBigData(layerID, internal.BigDataKey)
 	if err != nil {
 		// the cache file is not needed since there is no manifest file.
 		if errors.Is(err, os.ErrNotExist) {

@@ -40,7 +40,6 @@ const (
 	maxNumberMissingChunks  = 1024
 	autoMergePartsThreshold = 1024 // if the gap between two ranges is below this threshold, automatically merge them.
 	newFileFlags            = (unix.O_CREAT | unix.O_TRUNC | unix.O_EXCL | unix.O_WRONLY)
-	bigDataKey              = "zstd-chunked-manifest"
 	chunkedData             = "zstd-chunked-data"
 	chunkedLayerDataKey     = "zstd-chunked-layer-data"
 	tocKey                  = "toc"
@@ -1216,7 +1215,7 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 		Differ:   c,
 		TarSplit: c.tarSplit,
 		BigData: map[string][]byte{
-			bigDataKey:          c.manifest,
+			internal.BigDataKey: c.manifest,
 			chunkedLayerDataKey: lcdBigData,
 		},
 		Artifacts: map[string]interface{}{

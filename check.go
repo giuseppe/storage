@@ -15,6 +15,7 @@ import (
 
 	drivers "github.com/containers/storage/drivers"
 	"github.com/containers/storage/pkg/archive"
+	chunkedCheck "github.com/containers/storage/pkg/chunked/check"
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/ioutils"
 	"github.com/containers/storage/types"
@@ -393,6 +394,25 @@ func (s *store) Check(options *CheckOptions) (CheckReport, error) {
 					if !options.LayerDigests || layer.UncompressedDigest == "" || !options.LayerContents {
 						return
 					}
+
+					canUseShifting := s.canUseShifting(layer.UIDMap, layer.GIDMap)
+
+					// If we have a chunked check, use it as it is safer than tar-split as it uses a cryptographic hash instead of CRC.
+					if canUseShifting {
+						exists, errs := chunkedCheck.Check(store, id, mountPoint)
+						if exists || errs != nil {
+							for _, e := range errs {
+								err := fmt.Errorf("%slayer %s: %w", readWriteDesc, id, e)
+								if isReadWrite {
+									report.Layers[id] = append(report.Layers[id], err)
+								} else {
+									report.ROLayers[id] = append(report.ROLayers[id], err)
+								}
+							}
+							return
+						}
+					}
+
 					// Build a list of all of the changes in all of the layers
 					// that make up the tree we're looking at.
 					diffHeaderSet := [][]*tar.Header{}
@@ -415,7 +435,7 @@ func (s *store) Check(options *CheckOptions) (CheckReport, error) {
 					}
 					// Scan the directory tree under the mount point.
 					var idmap *idtools.IDMappings
-					if !s.canUseShifting(layer.UIDMap, layer.GIDMap) {
+					if !canUseShifting {
 						// we would have had to chown() layer contents to match ID maps
 						idmap = idtools.NewIDMappingsFromMaps(layer.UIDMap, layer.GIDMap)
 					}

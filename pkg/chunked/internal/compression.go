@@ -69,6 +69,7 @@ type FileMetadata struct {
 const (
 	ChunkTypeData  = ""
 	ChunkTypeZeros = "zeros"
+	BigDataKey     = "zstd-chunked-manifest"
 )
 
 const (

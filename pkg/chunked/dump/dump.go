@@ -4,6 +4,7 @@ package dump
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -198,10 +199,14 @@ func dumpNode(out io.Writer, added map[string]*internal.FileMetadata, links map[
 		return err
 	}
 
-	for k, v := range entry.Xattrs {
+	for k, vEncoded := range entry.Xattrs {
+		v, err := base64.StdEncoding.DecodeString(vEncoded)
+		if err != nil {
+			return fmt.Errorf("decode xattr %q: %w", k, err)
+		}
 		name := escaped(k, ESCAPE_EQUAL)
-		value := escaped(v, ESCAPE_EQUAL)
 
+		value := escaped(string(v), ESCAPE_EQUAL)
 		if _, err := fmt.Fprintf(out, " %s=%s", name, value); err != nil {
 			return err
 		}

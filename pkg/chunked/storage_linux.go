@@ -121,7 +121,7 @@ func (c *chunkedDiffer) convertTarToZstdChunked(destDirectory string, payload *o
 	f := os.NewFile(uintptr(fd), destDirectory)
 
 	newAnnotations := make(map[string]string)
-	level := 1
+	level := 0
 	chunked, err := compressor.ZstdCompressor(f, newAnnotations, &level)
 	if err != nil {
 		f.Close()
@@ -218,7 +218,7 @@ func makeConvertFromRawDiffer(store storage.Store, blobDigest digest.Digest, blo
 }
 
 func makeZstdChunkedDiffer(store storage.Store, blobSize int64, tocDigest digest.Digest, annotations map[string]string, iss ImageSourceSeekable, pullOptions map[string]string) (*chunkedDiffer, error) {
-	manifest, toc, tarSplit, tocOffset, err := readZstdChunkedManifest(iss, tocDigest, annotations)
+	manifest, toc, tarSplit, tocOffset, err := readZstdChunkedManifest(iss, tocDigest, annotations, true)
 	if err != nil {
 		return nil, fmt.Errorf("read zstd:chunked manifest: %w", err)
 	}
@@ -1175,6 +1175,7 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 		if err != nil {
 			return graphdriver.DriverWithDifferOutput{}, err
 		}
+
 		convertedBlobSize = tarSize
 		// fileSource is a O_TMPFILE file descriptor, so we
 		// need to keep it open until the entire file is processed.
@@ -1191,7 +1192,7 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 		if tocDigest == nil {
 			return graphdriver.DriverWithDifferOutput{}, fmt.Errorf("internal error: just-created zstd:chunked missing TOC digest")
 		}
-		manifest, toc, tarSplit, tocOffset, err := readZstdChunkedManifest(fileSource, *tocDigest, annotations)
+		manifest, toc, tarSplit, tocOffset, err := readZstdChunkedManifest(fileSource, *tocDigest, annotations, false)
 		if err != nil {
 			return graphdriver.DriverWithDifferOutput{}, fmt.Errorf("read zstd:chunked manifest: %w", err)
 		}
@@ -1200,7 +1201,7 @@ func (c *chunkedDiffer) ApplyDiff(dest string, options *archive.TarOptions, diff
 		stream = fileSource
 
 		// fill the chunkedDiffer with the data we just read.
-		c.fileType = fileTypeZstdChunked
+		c.fileType = fileTypeNoCompression
 		c.manifest = manifest
 		c.toc = toc
 		c.tarSplit = tarSplit

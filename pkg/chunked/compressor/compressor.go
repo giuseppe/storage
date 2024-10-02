@@ -11,7 +11,6 @@ import (
 
 	"github.com/containers/storage/pkg/chunked/internal"
 	"github.com/containers/storage/pkg/ioutils"
-	"github.com/klauspost/compress/zstd"
 	"github.com/opencontainers/go-digest"
 	"github.com/vbatts/tar-split/archive/tar"
 	"github.com/vbatts/tar-split/tar/asm"
@@ -205,7 +204,7 @@ type tarSplitData struct {
 	compressed          *bytes.Buffer
 	digester            digest.Digester
 	uncompressedCounter *ioutils.WriteCounter
-	zstd                *zstd.Encoder
+	zstd                internal.ZstdWriter
 	packer              storage.Packer
 }
 

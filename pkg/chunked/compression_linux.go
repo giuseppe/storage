@@ -140,7 +140,7 @@ func readEstargzChunkedManifest(blobStream ImageSourceSeekable, blobSize int64, 
 
 // readZstdChunkedManifest reads the zstd:chunked manifest from the seekable stream blobStream.
 // Returns (manifest blob, parsed manifest, tar-split blob, manifest offset).
-func readZstdChunkedManifest(blobStream ImageSourceSeekable, tocDigest digest.Digest, annotations map[string]string) ([]byte, *internal.TOC, []byte, int64, error) {
+func readZstdChunkedManifest(blobStream ImageSourceSeekable, tocDigest digest.Digest, annotations map[string]string, compressed bool) ([]byte, *internal.TOC, []byte, int64, error) {
 	offsetMetadata := annotations[internal.ManifestInfoKey]
 	if offsetMetadata == "" {
 		return nil, nil, nil, 0, fmt.Errorf("%q annotation missing", internal.ManifestInfoKey)
@@ -205,7 +205,7 @@ func readZstdChunkedManifest(blobStream ImageSourceSeekable, tocDigest digest.Di
 		return nil, nil, nil, 0, err
 	}
 
-	decodedBlob, err := decodeAndValidateBlob(manifest, manifestLengthUncompressed, tocDigest.String())
+	decodedBlob, err := decodeAndValidateBlob(manifest, manifestLengthUncompressed, tocDigest.String(), compressed)
 	if err != nil {
 		return nil, nil, nil, 0, fmt.Errorf("validating and decompressing TOC: %w", err)
 	}
@@ -223,7 +223,7 @@ func readZstdChunkedManifest(blobStream ImageSourceSeekable, tocDigest digest.Di
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		decodedTarSplit, err = decodeAndValidateBlob(tarSplit, tarSplitLengthUncompressed, toc.TarSplitDigest.String())
+		decodedTarSplit, err = decodeAndValidateBlob(tarSplit, tarSplitLengthUncompressed, toc.TarSplitDigest.String(), compressed)
 		if err != nil {
 			return nil, nil, nil, 0, fmt.Errorf("validating and decompressing tar-split: %w", err)
 		}
@@ -372,7 +372,7 @@ func ensureFileMetadataAttributesMatch(a, b *internal.FileMetadata) error {
 	return nil
 }
 
-func decodeAndValidateBlob(blob []byte, lengthUncompressed uint64, expectedCompressedChecksum string) ([]byte, error) {
+func decodeAndValidateBlob(blob []byte, lengthUncompressed uint64, expectedCompressedChecksum string, compressed bool) ([]byte, error) {
 	d, err := digest.Parse(expectedCompressedChecksum)
 	if err != nil {
 		return nil, fmt.Errorf("invalid digest %q: %w", expectedCompressedChecksum, err)
@@ -385,6 +385,10 @@ func decodeAndValidateBlob(blob []byte, lengthUncompressed uint64, expectedCompr
 	}
 	if blobDigester.Digest() != d {
 		return nil, fmt.Errorf("invalid blob checksum, expected checksum %s, got %s", d, blobDigester.Digest())
+	}
+
+	if !compressed {
+		return blob, nil
 	}
 
 	decoder, err := zstd.NewReader(nil) //nolint:contextcheck

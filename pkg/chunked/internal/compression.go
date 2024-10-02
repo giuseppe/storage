@@ -244,7 +244,36 @@ func WriteZstdChunkedManifest(dest io.Writer, outMetadata map[string]string, off
 	return appendZstdSkippableFrame(dest, manifestDataLE)
 }
 
-func ZstdWriterWithLevel(dest io.Writer, level int) (*zstd.Encoder, error) {
+type ZstdWriter interface {
+	io.WriteCloser
+	Reset(dest io.Writer)
+	Flush() error
+}
+
+type noCompression struct {
+	dest io.Writer
+}
+
+func (n noCompression) Write(p []byte) (int, error) {
+	return n.dest.Write(p)
+}
+
+func (n noCompression) Close() error {
+	return nil
+}
+
+func (n noCompression) Flush() error {
+	return nil
+}
+
+func (n noCompression) Reset(dest io.Writer) {
+	n.dest = dest
+}
+
+func ZstdWriterWithLevel(dest io.Writer, level int) (ZstdWriter, error) {
+	if level == 0 {
+		return &noCompression{dest: dest}, nil
+	}
 	el := zstd.EncoderLevelFromZstd(level)
 	return zstd.NewWriter(dest, zstd.WithEncoderLevel(el))
 }

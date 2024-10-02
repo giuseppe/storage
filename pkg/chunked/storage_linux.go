@@ -947,11 +947,6 @@ func (c *chunkedDiffer) retrieveMissingFiles(stream ImageSourceSeekable, dirfd i
 		}
 
 		if _, ok := err.(ErrBadRequest); ok {
-			// If the server cannot handle at least 64 chunks in a single request, just give up.
-			if len(chunksToRequest) < 64 {
-				return err
-			}
-
 			// Merge more chunks to request
 			missingParts = mergeMissingChunks(missingParts, len(chunksToRequest)/2)
 			calculateChunksToRequest()

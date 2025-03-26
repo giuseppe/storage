@@ -49,6 +49,33 @@ func CreateIDMappedMount(source, target string, pid int) error {
 	return nil
 }
 
+// GetIDMappedMount creates a IDMapped bind mount from SOURCE using the user namespace for the PID process.
+func GetIDMappedMount(source string, pid int) (*os.File, error) {
+	path := fmt.Sprintf("/proc/%d/ns/user", pid)
+	userNsFile, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get user ns file descriptor for %q: %w", path, err)
+	}
+	defer userNsFile.Close()
+
+	targetDirFd, err := unix.OpenTree(unix.ATFDCWD, source, unix.OPEN_TREE_CLONE)
+	if err != nil {
+		return nil, &os.PathError{Op: "open_tree", Path: source, Err: err}
+	}
+
+	if err := unix.MountSetattr(targetDirFd, "", unix.AT_EMPTY_PATH|unix.AT_RECURSIVE,
+		&unix.MountAttr{
+			Attr_set:    unix.MOUNT_ATTR_IDMAP,
+			Userns_fd:   uint64(userNsFile.Fd()),
+			Propagation: unix.MS_PRIVATE,
+		}); err != nil {
+		unix.Close(targetDirFd)
+		return nil, &os.PathError{Op: "mount_setattr", Path: source, Err: err}
+	}
+
+	return os.NewFile(uintptr(targetDirFd), source), nil
+}
+
 // CreateUsernsProcess forks the current process and creates a user namespace using the specified
 // mappings.  It returns the pid of the new process.
 func CreateUsernsProcess(uidMaps []idtools.IDMap, gidMaps []idtools.IDMap) (int, func(), error) {

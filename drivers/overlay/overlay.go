@@ -1732,7 +1732,13 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 
 	if needsIDMapping {
 		var newAbsDir []string
-		idMappedMounts := make(map[string]string)
+		idMappedMounts := make(map[string]*os.File)
+
+		defer func() {
+			for _, m := range idMappedMounts {
+				m.Close()
+			}
+		}()
 
 		mappedRoot := filepath.Join(d.home, id, "mapped")
 		if err := os.MkdirAll(mappedRoot, 0o700); err != nil {
@@ -1740,7 +1746,6 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 		}
 
 		// rewrite the lower dirs to their idmapped mount.
-		c := 0
 		for _, absLower := range absLowers {
 			mappedMountSrc := getMappedMountRoot(absLower)
 
@@ -1749,22 +1754,13 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 				continue
 			}
 
-			root, found := idMappedMounts[mappedMountSrc]
+			mountRoot, found := idMappedMounts[mappedMountSrc]
 			if !found {
-				root = filepath.Join(mappedRoot, fmt.Sprintf("%d", c))
-				c++
-				if err := idmap.CreateIDMappedMount(mappedMountSrc, root, idmappedMountProcessPid); err != nil {
-					return "", fmt.Errorf("create mapped mount for %q on %q: %w", mappedMountSrc, root, err)
+				mountRoot, err = idmap.GetIDMappedMount(mappedMountSrc, idmappedMountProcessPid)
+				if err != nil {
+					return "", fmt.Errorf("create mapped mount for %q: %w", mappedMountSrc, err)
 				}
-				idMappedMounts[mappedMountSrc] = root
-
-				// overlay takes a reference on the mount, so it is safe to unmount
-				// the mapped idmounts as soon as the final overlay file system is mounted.
-				defer func() {
-					if err := unix.Unmount(root, unix.MNT_DETACH); err != nil {
-						logrus.Warnf("Unmount %q: %v", root, err)
-					}
-				}()
+				idMappedMounts[mappedMountSrc] = mountRoot
 			}
 
 			// relative path to the layer through the id mapped mount
@@ -1773,7 +1769,8 @@ func (d *Driver) get(id string, disableShifting bool, options graphdriver.MountO
 				return "", err
 			}
 
-			newAbsDir = append(newAbsDir, filepath.Join(root, rel))
+			fdPath := fmt.Sprintf("/proc/self/fd/%d/%s", int(mountRoot.Fd()), rel)
+			newAbsDir = append(newAbsDir, fdPath)
 		}
 		absLowers = newAbsDir
 	}

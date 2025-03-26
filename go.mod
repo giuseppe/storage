@@ -12,8 +12,8 @@ require (
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3
 	github.com/cyphar/filepath-securejoin v0.4.1
 	github.com/docker/go-units v0.5.0
+	github.com/goccy/go-json v0.10.5
 	github.com/google/go-intervals v0.0.2
-	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.18.0
 	github.com/klauspost/pgzip v1.2.6
 	github.com/mattn/go-shellwords v1.0.12
@@ -44,8 +44,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
